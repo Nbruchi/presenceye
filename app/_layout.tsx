@@ -1,39 +1,71 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import "./global.css";
+import "react-native-reanimated";
+import { useFonts } from "expo-font";
+import { config } from "@/utils/config";
+import React, { useEffect } from "react";
+import { tokenCache } from "@/utils/cache";
+import { ClerkLoaded, ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { SplashScreen, Stack, useRouter, useSegments } from "expo-router";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+function InitialLayout() {
+    const { isLoaded, isSignedIn } = useAuth();
+    const segments = useSegments();
+    const router = useRouter();
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    const [fontsLoaded] = useFonts({
+        nunito: require("@/assets/fonts/Nunito-Black.ttf"),
+        "nunito-bold": require("@/assets/fonts/Nunito-Bold.ttf"),
+        "nunito-extrabold": require("@/assets/fonts/Nunito-ExtraBold.ttf"),
+        "nunito-medium": require("@/assets/fonts/Nunito-Medium.ttf"),
+        "nunito-regular": require("@/assets/fonts/Nunito-Regular.ttf"),
+        "nunito-semibold": require("@/assets/fonts/Nunito-SemiBold.ttf"),
+        "nunito-light": require("@/assets/fonts/Nunito-Light.ttf"),
+    });
+
+    useEffect(() => {
+        if (fontsLoaded) {
+            SplashScreen.hideAsync();
+        }
+    }, [fontsLoaded]);
+
+    useEffect(() => {
+        if (!isLoaded) return;
+
+        const inTabs = segments[0] === "(root)";
+
+        if (isSignedIn && !inTabs) {
+            router.replace("/home");
+        } else if (!isSignedIn && inTabs) {
+            router.replace("/login");
+        }
+    }, [isSignedIn, isLoaded]);
+
+    return (
+        <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(root)" />
+            <Stack.Screen name="+not-found" />
+        </Stack>
+    );
+}
+
+export default function MainLayout() {
+    const publishableKey = config.env.clerk.publishableKey;
+
+    if (!publishableKey) {
+        throw new Error(
+            "Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env"
+        );
     }
-  }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
-
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+    return (
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+            <ClerkLoaded>
+                <InitialLayout />
+            </ClerkLoaded>
+        </ClerkProvider>
+    );
 }
